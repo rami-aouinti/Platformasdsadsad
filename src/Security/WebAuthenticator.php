@@ -1,122 +1,119 @@
 <?php
 
-declare(strict_types=1);
-
 namespace App\Security;
 
-use App\Entity\User;
-use DateTimeImmutable;
-use Doctrine\ORM\EntityManagerInterface;
+use App\DataTransferObject\Credentials;
+use App\Form\LoginType;
+use Symfony\Component\Form\FormFactoryInterface;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Encoder\UserPasswordEncoderInterface;
-use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
-use Symfony\Component\Security\Core\Exception\InvalidCsrfTokenException;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Security;
 use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Core\User\UserProviderInterface;
-use Symfony\Component\Security\Csrf\CsrfToken;
-use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Component\Security\Guard\Authenticator\AbstractFormLoginAuthenticator;
-use Symfony\Component\Security\Guard\PasswordAuthenticatedInterface;
-use Symfony\Component\Security\Http\Util\TargetPathTrait;
 
-class WebAuthenticator extends AbstractFormLoginAuthenticator implements PasswordAuthenticatedInterface
+/**
+ * Class WebAuthenticator
+ * @package App\Security\Guard
+ */
+class WebAuthenticator extends AbstractFormLoginAuthenticator
 {
-    use TargetPathTrait;
-
-    public const LOGIN_ROUTE = 'security_login';
-
-    private EntityManagerInterface $entityManager;
+    /**
+     * @var UrlGeneratorInterface
+     */
     private UrlGeneratorInterface $urlGenerator;
-    private CsrfTokenManagerInterface $csrfTokenManager;
-    private UserPasswordEncoderInterface $passwordEncoder;
 
+    /**
+     * @var FormFactoryInterface
+     */
+    private FormFactoryInterface $formFactory;
+
+    /**
+     * @var UserPasswordEncoderInterface
+     */
+    private UserPasswordEncoderInterface $userPasswordEncoder;
+
+    /**
+     * WebAuthenticator constructor.
+     * @param UrlGeneratorInterface $urlGenerator
+     * @param FormFactoryInterface $formFactory
+     * @param UserPasswordEncoderInterface $userPasswordEncoder
+     */
     public function __construct(
-        EntityManagerInterface $entityManager,
         UrlGeneratorInterface $urlGenerator,
-        CsrfTokenManagerInterface $csrfTokenManager,
-        UserPasswordEncoderInterface $passwordEncoder
+        FormFactoryInterface $formFactory,
+        UserPasswordEncoderInterface $userPasswordEncoder
     ) {
-        $this->entityManager = $entityManager;
         $this->urlGenerator = $urlGenerator;
-        $this->csrfTokenManager = $csrfTokenManager;
-        $this->passwordEncoder = $passwordEncoder;
-    }
-
-    public function supports(Request $request): bool
-    {
-        return self::LOGIN_ROUTE === $request->attributes->get('_route')
-            && $request->isMethod('POST');
+        $this->formFactory = $formFactory;
+        $this->userPasswordEncoder = $userPasswordEncoder;
     }
 
     /**
-     * @return array<string, string>
+     * @inheritDoc
      */
-    public function getCredentials(Request $request): array
+    protected function getLoginUrl()
     {
-        $credentials = [
-            'email' => $request->request->get('email'),
-            'password' => $request->request->get('password'),
-            'csrf_token' => $request->request->get('_csrf_token'),
-        ];
+        return $this->urlGenerator->generate("security_login");
+    }
 
-        $request->getSession()->set(Security::LAST_USERNAME, $credentials['email']);
+    /**
+     * @inheritDoc
+     */
+    public function supports(Request $request)
+    {
+        return $request->isMethod(Request::METHOD_POST)
+            && $request->attributes->get("_route") === "security_login";
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getCredentials(Request $request)
+    {
+        $credentials = new Credentials();
+        $form = $this->formFactory->create(LoginType::class, $credentials)->handleRequest($request);
+
+        if (!$form->isValid()) {
+            return null;
+        }
 
         return $credentials;
     }
 
-    public function getUser($credentials, UserProviderInterface $userProvider): ?UserInterface
+    /**
+     * @param Credentials $credentials
+     * @param UserProviderInterface $userProvider
+     * @return UserInterface|void|null
+     */
+    public function getUser($credentials, UserProviderInterface $userProvider)
     {
-        $token = new CsrfToken('authenticate', $credentials['csrf_token']);
-        if (!$this->csrfTokenManager->isTokenValid($token)) {
-            throw new InvalidCsrfTokenException();
-        }
-
-        /** @var ?User $user */
-        $user = $this->entityManager
-            ->getRepository(User::class)
-            ->findOneBy(['email' => $credentials['email']]);
-
-        if (!$user) {
-            throw new CustomUserMessageAuthenticationException('Identifiants invalides.');
-        }
-
-        return $user;
-    }
-
-    public function checkCredentials($credentials, UserInterface $user): bool
-    {
-        return $this->passwordEncoder->isPasswordValid($user, $credentials['password']);
+        return $userProvider->loadUserByUsername($credentials->getUsername());
     }
 
     /**
-     * Used to upgrade (rehash) the user's password automatically over time.
-     * @param array<string, string> $credentials
-     * @return string|null
+     * @param Credentials $credentials
+     * @param UserInterface $user
+     * @return bool
      */
-    public function getPassword($credentials): ?string
+    public function checkCredentials($credentials, UserInterface $user)
     {
-        return $credentials['password'];
+        if ($valid = $this->userPasswordEncoder->isPasswordValid($user, $credentials->getPassword())) {
+            return true;
+        }
+
+        throw new AuthenticationException('Password not valid.');
     }
 
-    public function onAuthenticationSuccess(
-        Request $request,
-        TokenInterface $token,
-        string $providerKey
-    ): RedirectResponse {
-        /** @var User $user */
-        $user = $token->getUser();
-
-        $this->entityManager->flush();
-
+    /**
+     * @inheritDoc
+     */
+    public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $providerKey)
+    {
         return new RedirectResponse($this->urlGenerator->generate("index"));
-    }
-
-    protected function getLoginUrl(): string
-    {
-        return $this->urlGenerator->generate(self::LOGIN_ROUTE);
     }
 }

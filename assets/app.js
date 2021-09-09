@@ -12,7 +12,3 @@ import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.min.css'
 
 import $ from 'jquery'
-
-$(function () {
-    $('[data-toggle="tooltip"]').tooltip()
-})

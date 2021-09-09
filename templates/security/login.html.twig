@@ -1,22 +1,48 @@
-{% extends 'base.html.twig' %}
+{% extends 'security_template.html.twig' %}
 
-{% block layout %}{{ parent() }} login{% endblock %}
+{% block layout %}{{ parent() }} Login{% endblock %}
 
 {% block body %}
-    <form method="post" name="login">
-        <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
-        {% if error %}
-        {% endif %}
-        <div class="form-group">
-            <label for="email" class="form-label">Email</label>
-            <input type="text" value="{{ email }}" name="email" id="email" class="form-control" required autofocus>
+    <div class="container-login100" style="background-image: url('{{ asset('Login_v9/images/bg-01.jpg') }}');">
+        <div class="wrap-login100 p-l-55 p-r-55 p-t-80 p-b-30">
+            <form class="login100-form validate-form" method="post" name="login">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+                <span class="login100-form-title p-b-37">
+					Sign In
+				</span>
+
+                {{ form_start(form) }}
+                {{ form_errors(form) }}
+                <div class="wrap-input100 validate-input m-b-20" data-validate="Enter username or email">
+                    {{ form_row(form.username, { 'attr': {'class': 'input100'} }) }}
+                    <span class="focus-input100"></span>
+                </div>
+                <div class="wrap-input100 validate-input m-b-25" data-validate = "Enter password">
+                    {{ form_row(form.password, { 'attr': {'class': 'input100'} }) }}
+                    <span class="focus-input100"></span>
+                </div>
+                <div class="container-login100-form-btn">
+                    <button class="login100-form-btn" type="submit">
+                        Sign In
+                    </button>
+                </div>
+                {{ form_end(form) }}
+
+                <div class="text-center p-t-57 p-b-20">
+					<span class="txt1">
+						Or login with
+					</span>
+                </div>
+
+                {{ include('security/social_media.html.twig') }}
+
+                <div class="text-center">
+                    <a href="{{ path('registration') }}" class="txt2 hov1">
+                        Sign Up
+                    </a>
+                </div>
+            </form>
         </div>
-        <div class="form-group">
-            <label for="password" class="form-label">Mot de passe</label>
-            <input type="password" name="password" id="password" class="form-control" required>
-        </div>
-        <div class="text-center mt-4 mt-xxl-5">
-            <button class="btn btn-danger mb-4 d-block w-100" type="submit">Login</button>
-        </div>
-    </form>
+    </div>
+    <div id="dropDownSelect1"></div>
 {% endblock %}
